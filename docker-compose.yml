@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: selectel_mcp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d selectel_mcp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/selectel_mcp
+      DEFAULT_USER_ID: ${DEFAULT_USER_ID:-default}
+      SELECTEL_ACCOUNT_ID: ${SELECTEL_ACCOUNT_ID:-}
+      SELECTEL_SERVICE_USER_NAME: ${SELECTEL_SERVICE_USER_NAME:-}
+      SELECTEL_SERVICE_USER_PASSWORD: ${SELECTEL_SERVICE_USER_PASSWORD:-}
+      SELECTEL_IDENTITY_URL: https://cloud.api.selcloud.ru/identity/v3/auth/tokens
+      SELECTEL_BALANCES_URL: https://api.selectel.ru/v4/balances
+      SELECTEL_BALANCE_PREDICTION_URL: https://api.selectel.ru/v2/billing/prediction
+      HTTP_TIMEOUT_SECONDS: 30
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
