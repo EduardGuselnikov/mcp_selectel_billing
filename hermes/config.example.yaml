@@ -1,0 +1,41 @@
+# Фрагмент для ~/.hermes/config.yaml
+#
+# Вариант 1 (рекомендуется): stdio — Hermes сам запускает процесс, Docker не нужен.
+# Замените INSTALL_DIR на путь к клону репозитория.
+#
+# mcp_servers:
+#   selectel:
+#     command: "/path/to/mcp_selectel_billing/.venv/bin/python"
+#     args: ["-m", "app.mcp_stdio"]
+#     env:
+#       DATABASE_URL: "sqlite:////Users/you/.hermes/selectel-mcp.db"
+#       DEFAULT_USER_ID: "default"
+#       SELECTEL_ACCOUNT_ID: "12345"
+#       SELECTEL_SERVICE_USER_NAME: "svc-user"
+#       SELECTEL_SERVICE_USER_PASSWORD: "your-password"
+#     tools:
+#       resources: false
+#       prompts: false
+#
+# Быстрая установка через CLI (после клонирования и pip install -r requirements.txt):
+#
+#   hermes mcp add selectel \
+#     --command /path/to/mcp_selectel_billing/.venv/bin/python \
+#     --args -m app.mcp_stdio \
+#     --env DATABASE_URL=sqlite:////Users/you/.hermes/selectel-mcp.db \
+#     --env DEFAULT_USER_ID=default \
+#     --env SELECTEL_ACCOUNT_ID=12345 \
+#     --env SELECTEL_SERVICE_USER_NAME=svc-user \
+#     --env SELECTEL_SERVICE_USER_PASSWORD=your-password
+#
+# Проверка:
+#
+#   hermes mcp test selectel
+#   hermes mcp list
+#
+# Вариант 2: HTTP — если сервис уже запущен через Docker Compose.
+#
+# mcp_servers:
+#   selectel:
+#     url: "http://localhost:8000/mcp"
+#     connect_timeout: 30

@@ -26,6 +26,7 @@ MVP MCP-сервера для получения балансов Selectel че�
 ```
 app/
 ├── main.py                 # FastAPI + MCP mount
+├── mcp_stdio.py            # Stdio entry point для Hermes Agent
 ├── config.py               # Настройки из env
 ├── db.py                   # SQLAlchemy engine/session
 ├── models.py               # ORM-модели
@@ -184,6 +185,72 @@ curl -X POST http://localhost:8000/users/demo-user/selectel-credentials \
 В чате можно спросить: «Проверь мой баланс в Selectel» — агент вызовет `get_balance` без передачи пароля.
 
 > Нужен Cursor **0.48+** (поддержка Streamable HTTP).
+
+## Подключение в Hermes Agent
+
+Hermes удобнее подключается через **stdio** — агент сам запускает MCP-процесс, без Docker и PostgreSQL.
+
+### Вариант 1: stdio (рекомендуется)
+
+```bash
+git clone https://github.com/EduardGuselnikov/mcp_selectel_billing.git
+cd mcp_selectel_billing
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Добавьте в `~/.hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  selectel:
+    command: "/absolute/path/to/mcp_selectel_billing/.venv/bin/python"
+    args: ["-m", "app.mcp_stdio"]
+    env:
+      DATABASE_URL: "sqlite:////Users/you/.hermes/selectel-mcp.db"
+      DEFAULT_USER_ID: "default"
+      SELECTEL_ACCOUNT_ID: "12345"
+      SELECTEL_SERVICE_USER_NAME: "svc-user"
+      SELECTEL_SERVICE_USER_PASSWORD: "your-password"
+    tools:
+      resources: false
+      prompts: false
+```
+
+Или через CLI:
+
+```bash
+hermes mcp add selectel \
+  --command /absolute/path/to/mcp_selectel_billing/.venv/bin/python \
+  --args -m app.mcp_stdio \
+  --env DATABASE_URL=sqlite:////Users/you/.hermes/selectel-mcp.db \
+  --env DEFAULT_USER_ID=default \
+  --env SELECTEL_ACCOUNT_ID=12345 \
+  --env SELECTEL_SERVICE_USER_NAME=svc-user \
+  --env SELECTEL_SERVICE_USER_PASSWORD=your-password
+```
+
+Проверка:
+
+```bash
+hermes mcp test selectel
+hermes mcp list
+```
+
+В чате Hermes: «Проверь мой баланс в Selectel».
+
+Готовый манифест для каталога Hermes: `hermes/manifest.yaml`. Примеры конфигурации: `hermes/config.example.yaml`.
+
+### Вариант 2: HTTP (если уже запущен Docker)
+
+```yaml
+mcp_servers:
+  selectel:
+    url: "http://localhost:8000/mcp"
+```
+
+Перед использованием: `docker compose up --build` и credentials в `.env`.
 
 ## MCP tools
 

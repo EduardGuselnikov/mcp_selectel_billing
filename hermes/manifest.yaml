@@ -1,0 +1,63 @@
+# Шаблон манифеста для каталога Hermes Agent (optional-mcps/).
+# Отправьте PR в https://github.com/NousResearch/hermes-agent/tree/main/optional-mcps
+#
+# Локальная установка без каталога: см. hermes/config.example.yaml
+manifest_version: 1
+
+name: selectel
+description: Балансы, прогноз расхода и пополнение аккаунта Selectel.
+source: https://github.com/EduardGuselnikov/mcp_selectel_billing
+
+transport:
+  type: stdio
+  command: "${INSTALL_DIR}/.venv/bin/python"
+  args:
+    - "-m"
+    - "app.mcp_stdio"
+
+install:
+  type: git
+  url: https://github.com/EduardGuselnikov/mcp_selectel_billing.git
+  ref: main
+  bootstrap:
+    - "python3 -m venv .venv"
+    - ".venv/bin/pip install -r requirements.txt"
+
+auth:
+  type: api_key
+  env:
+    - name: DATABASE_URL
+      prompt: "Путь к локальной SQLite БД (оставьте по умолчанию)"
+      default: "sqlite:///${HOME}/.hermes/selectel-mcp.db"
+      required: true
+      secret: false
+    - name: DEFAULT_USER_ID
+      prompt: "ID пользователя для get_balance"
+      default: "default"
+      required: true
+      secret: false
+    - name: SELECTEL_ACCOUNT_ID
+      prompt: "ID аккаунта Selectel"
+      required: true
+      secret: false
+    - name: SELECTEL_SERVICE_USER_NAME
+      prompt: "Логин сервисного пользователя Selectel"
+      required: true
+      secret: false
+    - name: SELECTEL_SERVICE_USER_PASSWORD
+      prompt: "Пароль сервисного пользователя Selectel"
+      required: true
+      secret: true
+
+tools:
+  default_enabled:
+    - get_balance
+    - get_balance_prediction
+    - check_payment_status
+
+post_install: |
+  Credentials сохраняются в локальной SQLite БД. Токен Selectel обновляется
+  автоматически (~24 ч).
+
+  Инструменты пополнения (top_up_balance_*) изменяют баланс — включайте их
+  вручную через `hermes mcp configure selectel`, если они нужны.
