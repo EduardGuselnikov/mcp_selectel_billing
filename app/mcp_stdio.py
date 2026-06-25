@@ -16,7 +16,7 @@ def main() -> None:
     db = SessionLocal()
     try:
         if bootstrap_credentials_from_env(db):
-            logger.info("Selectel credentials loaded from environment")
+            logger.info("Selectel credentials synced from environment")
     finally:
         db.close()
 

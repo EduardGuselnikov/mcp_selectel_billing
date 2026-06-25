@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     selectel_payments_init_url: str = "https://api.selectel.ru/v3/payments/init"
     selectel_payment_external_info_url: str = "https://api.selectel.ru/v1/billing/payment/external_info"
     selectel_bill_order_url: str = "https://api.selectel.ru/v1/billing/bill"
+    selectel_billing_report_by_project_url: str = (
+        "https://api.selectel.ru/v1/billing/report/by_project/flat"
+    )
     http_timeout_seconds: float = 30.0
 
 

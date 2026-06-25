@@ -10,6 +10,12 @@ from app.services.balance_formatter import (
     format_balance_prediction_response,
     format_balances_response,
 )
+from app.services.billing_report_formatter import (
+    BillingReportParamsError,
+    format_billing_report_by_project_response,
+    validate_balance_filter,
+    validate_report_params,
+)
 from app.services.credentials_service import (
     CredentialsNotConfiguredError,
     build_selectel_client,
@@ -377,6 +383,67 @@ def check_payment_status(
 
     return _with_selectel_client(
         tool_name="check_payment_status",
+        user_id=user_id,
+        action=action,
+    )
+
+
+@mcp.tool()
+def get_billing_report_by_project(
+    start: str,
+    end: str,
+    locale: str,
+    project_ids: list[str] | None = None,
+    project_name: str | None = None,
+    product_name: str | None = None,
+    resource_name: str | None = None,
+    resource_type: str | None = None,
+    metric_id: str | None = None,
+    metric_name: str | None = None,
+    balance: str | None = None,
+    location_region: str | None = None,
+    group: bool = True,
+    user_id: str | None = None,
+) -> str:
+    """Получить отчёт по оказанным и оплаченным услугам Selectel за период.
+
+    Обязательные параметры: start (YYYY-MM-DD, включительно), end (YYYY-MM-DD, исключительно),
+    locale (ru или en). Опционально можно ограничить проекты через project_ids и отфильтровать
+    результат по project_name, product_name, resource_name, resource_type, metric_id,
+    metric_name, balance (main/bonus) и location_region. При group=true вернёт иерархию
+    Проект → Продукт → Объект → Метрики с итогами.
+    """
+
+    def action(client: SelectelClient, _resolved_user_id: str) -> str:
+        try:
+            validate_report_params(start=start, end=end, locale=locale)
+            validate_balance_filter(balance)
+        except BillingReportParamsError as exc:
+            return str(exc)
+
+        raw_rows = client.get_billing_report_by_project(
+            start=start,
+            end=end,
+            locale=locale,
+            project_ids=project_ids or None,
+        )
+        return format_billing_report_by_project_response(
+            raw_rows,
+            start=start,
+            end=end,
+            group=group,
+            project_name=project_name,
+            product_name=product_name,
+            resource_name=resource_name,
+            resource_type=resource_type,
+            metric_id=metric_id,
+            metric_name=metric_name,
+            balance=balance,
+            location_region=location_region,
+        )
+
+    return _with_selectel_client(
+        tool_name="get_billing_report_by_project",
         user_id=user_id,
         action=action,
     )

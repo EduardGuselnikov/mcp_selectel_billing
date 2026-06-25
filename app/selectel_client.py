@@ -39,6 +39,10 @@ class SelectelAPIError(SelectelError):
         self.status_code = status_code
 
 
+class SelectelValidationError(SelectelAPIError):
+    """Request validation failed (422)."""
+
+
 class SelectelClient:
     def __init__(
         self,
@@ -53,6 +57,7 @@ class SelectelClient:
         payments_init_url: str | None = None,
         payment_external_info_url: str | None = None,
         bill_order_url: str | None = None,
+        billing_report_by_project_url: str | None = None,
         timeout: float | None = None,
         token_persistence: TokenPersistence | None = None,
         http_client: httpx.Client | None = None,
@@ -69,6 +74,9 @@ class SelectelClient:
             payment_external_info_url or settings.selectel_payment_external_info_url
         )
         self.bill_order_url = bill_order_url or settings.selectel_bill_order_url
+        self.billing_report_by_project_url = (
+            billing_report_by_project_url or settings.selectel_billing_report_by_project_url
+        )
         self.timeout = timeout if timeout is not None else settings.http_timeout_seconds
         self._token_persistence = token_persistence
         self._http_client = http_client
@@ -232,6 +240,92 @@ class SelectelClient:
             return response.json()
         except ValueError as exc:
             raise SelectelAPIError("Selectel API вернул некорректный ответ.") from exc
+
+    def _parse_billing_report_response(self, response: httpx.Response) -> list[dict]:
+        if response.status_code == 401:
+            raise SelectelAuthError("Неверный логин или пароль сервисного пользователя.")
+        if response.status_code == 403:
+            raise SelectelAccessError(
+                "Сервисный пользователь не имеет доступа к отчёту по проектам."
+            )
+        if response.status_code == 422:
+            try:
+                body = response.json()
+            except ValueError as exc:
+                raise SelectelAPIError("Selectel API вернул некорректный ответ.") from exc
+
+            lines = ["Не удалось получить отчёт: ошибка в параметрах запроса."]
+            error = body.get("error")
+            if isinstance(error, dict):
+                for field, messages in error.items():
+                    if isinstance(messages, list):
+                        for message in messages:
+                            lines.append(f"Поле {field}: {message}")
+                    else:
+                        lines.append(f"Поле {field}: {messages}")
+            raise SelectelValidationError("\n".join(lines), status_code=422)
+
+        if response.status_code >= 500:
+            raise SelectelAPIError(
+                "Selectel API временно недоступен.",
+                status_code=response.status_code,
+            )
+        if response.status_code >= 400:
+            reason = response.text
+            try:
+                body = response.json()
+                reason = body.get("error") or body.get("message") or reason
+            except ValueError:
+                pass
+            raise SelectelAPIError(
+                f"Не удалось получить отчёт по проектам.\nПричина: {reason}",
+                status_code=response.status_code,
+            )
+
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise SelectelAPIError("Selectel API вернул некорректный ответ.") from exc
+
+        if isinstance(body, list):
+            return body
+
+        if isinstance(body, dict):
+            status = body.get("status")
+            if status == "success":
+                data = body.get("data")
+                return data if isinstance(data, list) else []
+            if status == "error":
+                reason = body.get("error") or body.get("message") or "неизвестная ошибка"
+                raise SelectelAPIError(
+                    f"Не удалось получить отчёт по проектам.\nПричина: {reason}"
+                )
+
+        raise SelectelAPIError("Selectel API вернул некорректный ответ.")
+
+    def get_billing_report_by_project(
+        self,
+        *,
+        start: str,
+        end: str,
+        locale: str,
+        project_ids: list[str] | None = None,
+    ) -> list[dict]:
+        params: list[tuple[str, str]] = [
+            ("start", start),
+            ("end", end),
+            ("locale", locale),
+        ]
+        if project_ids:
+            for project_id in project_ids:
+                params.append(("project_ids", project_id))
+
+        response = self.request_with_auto_refresh(
+            "GET",
+            self.billing_report_by_project_url,
+            params=params,
+        )
+        return self._parse_billing_report_response(response)
 
     def get_balances(self) -> dict:
         response = self.request_with_auto_refresh("GET", self.balances_url)

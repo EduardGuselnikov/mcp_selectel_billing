@@ -99,16 +99,29 @@ def bootstrap_credentials_from_env(db: Session) -> bool:
     user_id = settings.default_user_id
     assert user_id is not None
 
+    account_id = settings.selectel_account_id
+    service_user_name = settings.selectel_service_user_name
+    service_user_password = settings.selectel_service_user_password
+    assert account_id is not None
+    assert service_user_name is not None
+    assert service_user_password is not None
+
     existing = db.query(UserSelectelCredentials).filter_by(user_id=user_id).one_or_none()
     if existing is not None:
-        return False
+        credentials_changed = (
+            existing.selectel_account_id != account_id
+            or existing.service_user_name != service_user_name
+            or existing.service_user_password != service_user_password
+        )
+        if not credentials_changed:
+            return False
 
     upsert_credentials(
         db,
         user_id=user_id,
-        account_id=settings.selectel_account_id,
-        service_user_name=settings.selectel_service_user_name,
-        service_user_password=settings.selectel_service_user_password,
+        account_id=account_id,
+        service_user_name=service_user_name,
+        service_user_password=service_user_password,
     )
     db.commit()
     return True
