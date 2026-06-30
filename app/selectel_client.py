@@ -14,7 +14,8 @@ from app.services.selectel_token_service import (
 
 logger = logging.getLogger(__name__)
 
-UTM_SOURCE = "mcp_ed"
+CLIENT_SOURCE = "mcp_ed"
+USER_AGENT = f"selectel-mcp-billing/{CLIENT_SOURCE}"
 
 
 class SelectelError(Exception):
@@ -105,21 +106,11 @@ class SelectelClient:
             return self._http_client
         return httpx.Client(timeout=self.timeout)
 
-    def _merge_tracking_params(self, kwargs: dict[str, Any]) -> dict[str, Any]:
-        params = kwargs.get("params")
-        if params is None:
-            kwargs["params"] = [("utm_source", UTM_SOURCE)]
-            return kwargs
-
-        if isinstance(params, dict):
-            if "utm_source" not in params:
-                kwargs["params"] = {**params, "utm_source": UTM_SOURCE}
-            return kwargs
-
-        param_names = {name for name, _ in params}
-        if "utm_source" not in param_names:
-            kwargs["params"] = [*params, ("utm_source", UTM_SOURCE)]
-        return kwargs
+    def _with_tracking_headers(self, headers: dict[str, str] | None = None) -> dict[str, str]:
+        request_headers = dict(headers) if headers else {}
+        request_headers["User-Agent"] = USER_AGENT
+        request_headers["X-Client-Source"] = CLIENT_SOURCE
+        return request_headers
 
     def _request_identity_api(self) -> str:
         try:
@@ -129,7 +120,7 @@ class SelectelClient:
                 response = client.post(
                     self.identity_url,
                     json=self._build_auth_payload(),
-                    **self._merge_tracking_params({}),
+                    headers=self._with_tracking_headers(),
                 )
             finally:
                 if owns_client:
@@ -223,16 +214,13 @@ class SelectelClient:
         headers: dict[str, str] | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
-        request_headers = {"x-auth-token": token}
-        if headers:
-            request_headers.update(headers)
+        request_headers = self._with_tracking_headers({"x-auth-token": token, **(headers or {})})
 
         try:
             client = self._get_http_client()
             owns_client = self._http_client is None
             try:
-                request_kwargs = self._merge_tracking_params(kwargs)
-                return client.request(method, url, headers=request_headers, **request_kwargs)
+                return client.request(method, url, headers=request_headers, **kwargs)
             finally:
                 if owns_client:
                     client.close()

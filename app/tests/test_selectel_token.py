@@ -162,7 +162,7 @@ def test_error_when_401_after_refresh() -> None:
         client.get_balances()
 
 
-def test_adds_utm_source_to_all_requests() -> None:
+def test_adds_client_source_header_to_all_requests() -> None:
     db = MagicMock()
     credentials = MagicMock()
     credentials.selectel_token = None
@@ -180,7 +180,8 @@ def test_adds_utm_source_to_all_requests() -> None:
 
     assert len(requests) == 2
     for request in requests:
-        assert dict(request.url.params) == {"utm_source": "mcp_ed"}
+        assert request.headers["user-agent"] == "selectel-mcp-billing/mcp_ed"
+        assert request.headers["x-client-source"] == "mcp_ed"
 
 
 def test_calculate_token_expires_at() -> None:
