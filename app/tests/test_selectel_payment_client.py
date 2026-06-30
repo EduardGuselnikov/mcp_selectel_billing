@@ -34,6 +34,7 @@ def test_get_cards() -> None:
     client._http_client.request.assert_called_once()
     call_kwargs = client._http_client.request.call_args.kwargs
     assert call_kwargs["headers"]["x-auth-token"] == "test-token"
+    assert call_kwargs["params"] == [("utm_source", "mcp_ed")]
 
 
 def test_pay_with_saved_card() -> None:
@@ -50,6 +51,7 @@ def test_pay_with_saved_card() -> None:
     assert call_args.args[0] == "POST"
     assert call_args.args[1].endswith("/123/pay")
     assert call_args.kwargs["json"] == {"amount": 10000}
+    assert call_args.kwargs["params"] == [("utm_source", "mcp_ed")]
 
 
 def test_init_payment_form_encoded() -> None:
