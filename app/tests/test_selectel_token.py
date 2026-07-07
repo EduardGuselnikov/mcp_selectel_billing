@@ -17,6 +17,15 @@ IDENTITY_URL = "https://cloud.api.selcloud.ru/identity/v3/auth/tokens"
 BALANCES_PAYLOAD = {"status": "success", "data": {"agreements": [], "settings": {}}}
 
 
+def _is_identity_request(request: httpx.Request) -> bool:
+    url = httpx.URL(IDENTITY_URL)
+    return (
+        request.url.scheme == url.scheme
+        and request.url.host == url.host
+        and request.url.path == url.path
+    )
+
+
 def _make_client(
     *,
     credentials: MagicMock,
@@ -50,7 +59,7 @@ def test_uses_cached_token() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal identity_calls
-        if request.url == httpx.URL(IDENTITY_URL):
+        if _is_identity_request(request):
             identity_calls += 1
             return httpx.Response(200, headers={"X-Subject-Token": "new-token"})
         assert request.headers["x-auth-token"] == "cached-token"
@@ -72,7 +81,7 @@ def test_refreshes_when_token_missing() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal identity_calls
-        if request.url == httpx.URL(IDENTITY_URL):
+        if _is_identity_request(request):
             identity_calls += 1
             return httpx.Response(200, headers={"X-Subject-Token": "fresh-token"})
         assert request.headers["x-auth-token"] == "fresh-token"
@@ -96,7 +105,7 @@ def test_refreshes_when_token_expires_soon() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal identity_calls
-        if request.url == httpx.URL(IDENTITY_URL):
+        if _is_identity_request(request):
             identity_calls += 1
             return httpx.Response(200, headers={"X-Subject-Token": "fresh-token"})
         assert request.headers["x-auth-token"] == "fresh-token"
@@ -118,7 +127,7 @@ def test_auto_refresh_after_401() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal balance_calls, identity_calls
-        if request.url == httpx.URL(IDENTITY_URL):
+        if _is_identity_request(request):
             identity_calls += 1
             return httpx.Response(200, headers={"X-Subject-Token": "fresh-token"})
         balance_calls += 1
@@ -143,7 +152,7 @@ def test_error_when_401_after_refresh() -> None:
     credentials.selectel_token_expires_at = datetime.now(timezone.utc) + timedelta(hours=10)
 
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url == httpx.URL(IDENTITY_URL):
+        if _is_identity_request(request):
             return httpx.Response(200, headers={"X-Subject-Token": "fresh-token"})
         return httpx.Response(401)
 
@@ -151,6 +160,28 @@ def test_error_when_401_after_refresh() -> None:
 
     with pytest.raises(SelectelAuthError):
         client.get_balances()
+
+
+def test_adds_client_source_header_to_all_requests() -> None:
+    db = MagicMock()
+    credentials = MagicMock()
+    credentials.selectel_token = None
+    credentials.selectel_token_expires_at = None
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if _is_identity_request(request):
+            return httpx.Response(200, headers={"X-Subject-Token": "fresh-token"})
+        return httpx.Response(200, json=BALANCES_PAYLOAD)
+
+    client = _make_client(credentials=credentials, db=db, handler=handler)
+    client.get_balances()
+
+    assert len(requests) == 2
+    for request in requests:
+        assert request.headers["user-agent"] == "selectel-mcp-billing/mcp_ed"
+        assert request.headers["x-client-source"] == "mcp_ed"
 
 
 def test_calculate_token_expires_at() -> None:

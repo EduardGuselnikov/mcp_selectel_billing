@@ -14,6 +14,9 @@ from app.services.selectel_token_service import (
 
 logger = logging.getLogger(__name__)
 
+CLIENT_SOURCE = "mcp_ed"
+USER_AGENT = f"selectel-mcp-billing/{CLIENT_SOURCE}"
+
 
 class SelectelError(Exception):
     """Base Selectel API error."""
@@ -103,12 +106,22 @@ class SelectelClient:
             return self._http_client
         return httpx.Client(timeout=self.timeout)
 
+    def _with_tracking_headers(self, headers: dict[str, str] | None = None) -> dict[str, str]:
+        request_headers = dict(headers) if headers else {}
+        request_headers["User-Agent"] = USER_AGENT
+        request_headers["X-Client-Source"] = CLIENT_SOURCE
+        return request_headers
+
     def _request_identity_api(self) -> str:
         try:
             client = self._get_http_client()
             owns_client = self._http_client is None
             try:
-                response = client.post(self.identity_url, json=self._build_auth_payload())
+                response = client.post(
+                    self.identity_url,
+                    json=self._build_auth_payload(),
+                    headers=self._with_tracking_headers(),
+                )
             finally:
                 if owns_client:
                     client.close()
@@ -201,9 +214,7 @@ class SelectelClient:
         headers: dict[str, str] | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
-        request_headers = {"x-auth-token": token}
-        if headers:
-            request_headers.update(headers)
+        request_headers = self._with_tracking_headers({"x-auth-token": token, **(headers or {})})
 
         try:
             client = self._get_http_client()
